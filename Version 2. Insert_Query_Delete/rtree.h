@@ -1,6 +1,7 @@
 /* Definitions of major classes */ 
 
 #include "rtnode.h"
+#include <vector>
 
 class RTree {
 	public:
@@ -26,6 +27,7 @@ class RTree {
 		void stat(RTNode* node, int& record_cnt, int& node_cnt);
 		void print_node(RTNode* node, int indent_level);
 
+
 	public:
 		void stat();
 		void print_tree();
@@ -34,6 +36,7 @@ class RTree {
 		bool query_point(const vector<int>& coordinate, Entry& result);
 		bool tie_breaking(const BoundingBox& box1, const BoundingBox& box2);
 		bool del(const vector<int>& coordinate);
+        void condense_tree(RTNode* L,RTNode** stack, int* entry_idx, int stack_size);
 
 	private:
 		int max_entry_num;

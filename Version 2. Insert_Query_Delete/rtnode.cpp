@@ -1,4 +1,5 @@
 #include "rtnode.h"
+#include <algorithm>
 
 //======================== Entry implementation =====================================================
 
@@ -84,3 +85,6 @@ RTNode::~RTNode()
 	delete []entries;
 	entries = NULL;
 }
+
+
+

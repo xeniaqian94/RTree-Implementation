@@ -1,6 +1,7 @@
 /* Implementations of R tree */
 #include <cmath>
 #include "rtree.h"
+#include <algorithm>
 
 
 const double EPSILON = 1E-10;
@@ -500,15 +501,82 @@ bool RTree::insert(const Entry& e, int dest_level)
 	return true;
 }
 
+static bool compare_node(RTNode *x, RTNode *y)
+{
+    return x->level > y->level;
+}
+
+static bool compare_entry(Entry x, Entry y)
+{
+    RTree t(2);
+    return t.tie_breaking(x.get_mbr(), y.get_mbr());
+}
+
+void RTree::condense_tree(RTNode* L, RTNode** stack, int* entry_idx, int stack_size)
+{
+    RTNode* N=L;
+    
+    vector<RTNode*> Q;  //the set of eliminated nodes, initially empty
+    while (N!=this->root){
+        int EN=entry_idx[stack_size];
+        RTNode* P=stack[stack_size];
+        
+        if (N->entry_num<ceil(0.5*max_entry_num)){  //if N has fewer than m entries
+            
+            swap_entry(P->entries, EN, P->entry_num-1);
+            P->entry_num--;
+            Q.push_back(N);
+        }
+        else{  //if N has not been eliminated, adjust EnI to tightly contain all entries in N
+            BoundingBox new_box(get_mbr(N->entries,N->entry_num));
+            P->entries[EN].set_mbr(new_box);
+        }
+        N=P; //set N=P and repeat
+        stack_size--;
+    }
+    sort(Q.begin(), Q.end(), compare_node); //higher level nodes first
+    for (int i = 0; i < Q.size(); i++)
+    {
+      sort(Q.at(i)->entries, Q.at(i)->entries + Q.at(i)->entry_num, compare_entry); //tie_breaking between entries
+      for (int j = 0; j < Q.at(i)->entry_num; j++)
+	insert(Q.at(i)->entries[j], Q.at(i)->level); //higher entries must be placed higher
+    }
+}
+
 bool RTree::del(const vector<int>& coordinate)
 {
 	if (coordinate.size() != this->dimension)
 	{
 		cerr << "R-tree dimensionality inconsistency\n";
 	}
-	/*
-	Add your code here
-	*/
+    RTNode* stack[20];
+    int entry_idx[20];
+    int stack_size=1;
+    
+    BoundingBox B(coordinate,coordinate);
+    Entry E(B,1);
+    RTNode* L=find_leaf(this->root, stack, entry_idx, stack_size, E); //Find the leaf node and delete the ``record''.
+    
+//    
+//    RTNode* L=this->root->find_leaf(coordinate,index); //T could be the found leaf or NULL
+    stack_size--;
+    if (L==NULL) {
+      // cout<<"Deleting ";
+      //  B.print();
+      //  cout<<" but failed find_leaf()\n";
+        return false; //if there is no such entry
+        
+    }
+    else{ //swap E with the last entry of L(if needed), then remove the last entry of L from L
+
+        condense_tree(L,stack,entry_idx, stack_size); //Invoke CondenseTree, passing L
+        if (this->root->entry_num==1&&this->root->level!=0){ //D4
+            this->root=this->root->entries[0].get_ptr();
+        }
+    }
+    return true;
+    
+    
 }
 
 
@@ -539,21 +607,22 @@ bool RTree::query_point(const vector<int>& coordinate, Entry& result)
   If the two boxes is the same, return true.
   This is to give a unified way of tie-breaking such that if your program is correct, then the result should be same, not influnced by any ties.
  *********************************************************/
-bool RTree::tie_breaking(const BoundingBox& box1, const BoundingBox& box2)
-{
-	//for every dimension, try to break tie by the lowest value, then the highest
-	for (int i = 0; i < box1.get_dim(); i++)
-	{
-		if (box1.get_lowestValue_at(i) != box2.get_lowestValue_at(i))
-		{
-			return box1.get_lowestValue_at(i) < box2.get_lowestValue_at(i);
-		}
-		else if (box1.get_highestValue_at(i) != box2.get_highestValue_at(i))
-		{
-			return box1.get_highestValue_at(i) > box2.get_highestValue_at(i);
-		}
-	}
-	return true;
+
+
+bool RTree::tie_breaking(const BoundingBox& box1, const BoundingBox& box2){
+    for (int i = 0; i < box1.get_dim(); i++)
+    {
+        if (box1.get_lowestValue_at(i) != box2.get_lowestValue_at(i))
+        {
+            return box1.get_lowestValue_at(i) < box2.get_lowestValue_at(i);
+        }
+        else if (box1.get_highestValue_at(i) != box2.get_highestValue_at(i))
+        {
+            return box1.get_highestValue_at(i) > box2.get_highestValue_at(i);
+        }
+    }
+    return true;
+    
 }
 
 
